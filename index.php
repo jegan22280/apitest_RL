@@ -10,13 +10,13 @@
 // ex code:
 // 1. Set the URL (Replace {baseurl} with the actual production URL)
 
-$url = "https://api.rlcarriers.com/test/DocumentRetrieval/GetDocumentTypes?ProNumber=I111111111";
+$docsURL = "https://api.rlcarriers.com/test/DocumentRetrieval/GetDocumentTypes";
 // to list docs I have access to
-$url = "https://api.rlcarriers.com/test/DocumentRetrieval/?ProNumber=I111111111";
+$typesURL = "https://api.rlcarriers.com/test/DocumentRetrieval/";
 // to get docs
 
 // 2. Initialize cURL
-$ch = curl_init($url);
+$ch = curl_init($typesURL);
 
 // 3. Set headers and options
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -34,4 +34,6 @@ if (curl_errno($ch)) {
     echo $response;
 }
 
+echo $typesURL;
+echo $docsURL;
 ?>
