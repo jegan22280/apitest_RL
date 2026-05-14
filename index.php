@@ -1,39 +1,71 @@
 <?php
-// '{baseurl}/DocumentRetrieval?DocumentTypes=WeightCertificate&ProNumber=056391174&AllInOneDocument=true&MediaType=pdf'
-// need to use PEAR HTTP_Request2 or cURL
-// base url is as follows:
-// Production Environment: https://api.rlcarriers.com
-// Test/Sandbox Environment: https://api.rlcarriers.com/test
-// api key: gtOzM2Ijk5O0U3ZjktOWIyYy00NDAwLWI4ODZTBlAxMTMGUGC
-// MediaType is required so i may end up running the call 2x
+require_once "includes/functions.php";
+// 10. Configuration
+$apiKey = 'gtOzM2Ijk5O0U3ZjktOWIyYy00NDAwLWI4ODZTBlAxMTMGUGC';
+$baseUrl = "https://api.rlc.com";
+$searchItems = ["WeightCertificate", "NmfcCertificate", "BillOfLading","DeliveryReceipt", "Invoice"];
+$proArray = [];
 
-// ex code:
-// 1. Set the URL (Replace {baseurl} with the actual production URL)
+// 20. Fetch Delivered Shipments (Activity History)
+$historyUrl = "$baseUrl/ActivityHistory/ShipmentHistory";
 
-$docsURL = "https://api.rlcarriers.com/test/DocumentRetrieval/GetDocumentTypes";
-// to list docs I have access to
-$typesURL = "https://api.rlcarriers.com/test/DocumentRetrieval/";
-// to get docs
-
-// 2. Initialize cURL
-$ch = curl_init($typesURL);
-
-// 3. Set headers and options
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'apiKey: gtOzM2Ijk5O0U3ZjktOWIyYy00NDAwLWI4ODZTBlAxMTMGUGC' // Replace with your actual key
+// Note: StartDate can only be up to 1 month ago
+$historyPayload = json_encode([
+    "StartDate" => date('m/d/Y', strtotime('-1 month')), 
+    "EndDate" => date('m/d/Y'),
+    "ShipmentStatus" => "DELIVERED"
 ]);
 
-// 4. Execute and get the result
-$response = curl_exec($ch);
+$ch = curl_init($historyUrl);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+curl_setopt($ch, CURLOPT_POSTFIELDS, $historyPayload);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "apiKey: $apiKey",
+    "Content-Type: application/json"
+]);
 
-// 5. Check for errors or output the data
-if (curl_errno($ch)) {
-    echo 'Error: ' . curl_error($ch);
+$historyResponse = curl_exec($ch);
+$historyData = json_decode($historyResponse, true);
+curl_close($ch);
+
+
+// 30. Process results and check documents
+if (!empty($historyData['ShipmentHistoryResults'])) {
+    echo "## Checking " . count($historyData['ShipmentHistoryResults']) . " delivered shipments:\n\n";
+    echo "<br>";
+    foreach ($historyData['ShipmentHistoryResults'] as $shipment) {
+        // Correct path based on documentation for Activity History response
+        $pro = $shipment['ShipmentInformation']['ProNumber'] ?? null;
+        
+        if (!$pro) continue;
+
+        // 40. Call GetDocumentTypes for this PRO
+        $typesURL = "$baseUrl/DocumentRetrieval/GetDocumentTypes?ProNumber=$pro";
+        
+        $chType = curl_init($typesURL);
+        curl_setopt($chType, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($chType, CURLOPT_HTTPHEADER, ["apiKey: $apiKey"]);
+        
+        $typeResponse = curl_exec($chType);
+        $typeData = json_decode($typeResponse, true);
+        curl_close($chType);
+
+        $availableDocs = $typeData['DocumentTypes'] ?? [];
+        $matches = array_intersect($searchItems, $availableDocs);
+
+        // 50. Output findings
+        echo "PRO #$pro: ";
+        if (!empty($matches)) {
+            echo "Found (" . implode(", ", $matches) . ")\n";
+            array_push($proArray, $pro);
+        } else {
+            echo "No matching documents found.\n";
+        }
+        echo "<br>";
+    }
 } else {
-    echo $response;
+    echo "No delivered shipments found in the specified date range.";
+    // Debugging: echo $historyResponse; 
 }
-
-echo $typesURL;
-echo $docsURL;
 ?>
